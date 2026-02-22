@@ -10,6 +10,8 @@ html = IEIP_response.text
 soup = BeautifulSoup(html, "html.parser")
 
 IEIP_items = soup.select("div.table_wrap > table > tbody > tr")
+# division : 회차, written_form : 필기시험 원서, written_exam : 필기시험 날짜, written_result_date : 필기시험 합격자 발표 날짜, 
+# practical_form : 실기시험 원서, practical_exam : 실기시험 날짜, final_result_date : 최종 합격자 발표 날짜
 for item in IEIP_items:
     division = item.select_one("td:nth-child(1)").text
     written_form = item.select_one("td:nth-child(2)").text
@@ -18,5 +20,5 @@ for item in IEIP_items:
     practical_form = item.select_one("td:nth-child(5)").text
     practical_exam = item.select_one("td:nth-child(6)").text
     final_result_date = item.select_one("td:nth-child(7)").text
-    print(division, written_form, written_exam, written_result_date, practical_form, practical_exam, final_result_date)
+    IEIP_data.append([division, written_form, written_exam, written_result_date, practical_form, practical_exam, final_result_date])
     # IEIP_data.append([days,contents])
