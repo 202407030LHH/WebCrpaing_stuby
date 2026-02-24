@@ -243,7 +243,5 @@ sqld_csv_path = os.path.join(csv_dir, "Sqld_restructured.csv")
 df_sqld_restructured.to_csv(sqld_csv_path, index=False, encoding="utf-8-sig")
 print(f"Sqld CSV 저장: {sqld_csv_path}")
 
-print("\n=== 재구성된 데이터 샘플 ===")
-print(df_all_restructured.head(10))
-
-df_all.to_csv("../../02. csv/calender_data.csv", index=False, encoding="utf-8-sig")
+print("\n=== 재구성된 데이터 샘플 (필기/실기로 분리) ===")
+print(df_all_restructured.to_string())
