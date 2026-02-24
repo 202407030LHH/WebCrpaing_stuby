@@ -6,6 +6,7 @@ import pandas as pd
 calender_data = []
 
 # 유한대학교 일정 데이터 크롤링
+# 유한대 일정은 데이터 형식이 달라 제외
 yuhan_data = []
 yuhan_response = requests.get("https://www.yuhan.ac.kr/collegeService/schedule.do?menu_idx=3124&year=2026&toMonth=2&option=&SCH_DAY=&calPopDayId=&cal_Type=2")
 html = yuhan_response.text
@@ -45,7 +46,7 @@ html = linux_response.text
 soup = BeautifulSoup(html, "html.parser")
 
 linux_items = soup.select_one(".table_wrap > table > tbody")
-comment = linux_items.find(string=lambda text: isinstance(text, Comment) and "리눅스마스터 2급" in str(text))
+comment = linux_items.find(string=lambda text: isinstance(text, Comment) and "2급" in str(text))
 next_trs = comment.find_next_siblings("tr")  # 다음의 모든 tr 태그
 
 division = "reset"
@@ -62,7 +63,7 @@ for item in next_trs:
         if(exam_type == "1차"):
             linux_data.append({"division": division, "written_form": wrritten_form, "written_exam": written_exam, "written_result_date": written_result_date})
         else:
-            linux_data.update({"practical_form": wrritten_form, "practical_exam": written_exam, "final_result_date": written_result_date})
+            linux_data[-1].update({"practical_form": wrritten_form, "practical_exam": written_exam, "final_result_date": written_result_date})
 
     elif len(rows) >= 5:
         division = rows[0].text.strip()
@@ -73,7 +74,7 @@ for item in next_trs:
         if(exam_type == "1차"):
             linux_data.append({"division": division, "written_form": wrritten_form, "written_exam": written_exam, "written_result_date": written_result_date})
         else:
-            linux_data.update({"practical_form": wrritten_form, "practical_exam": written_exam, "final_result_date": written_result_date})
+            linux_data[-1].update({"practical_form": wrritten_form, "practical_exam": written_exam, "final_result_date": written_result_date})
 
     elif len(rows) >=4: 
         exam_type = rows[0].text.strip()
@@ -87,6 +88,6 @@ for item in next_trs:
 
 
 with pd.ExcelWriter("../../01. xlsx/calender_data.xlsx") as writer:
-    pd.DataFrame(yuhan_data).to_excel(writer, sheet_name="Yuhan", index=False)
+    # d.DataFrame(yuhan_data).to_excel(writer, sheet_name="Yuhan", index=False)
     pd.DataFrame(IEIP_data).to_excel(writer, sheet_name="IEIP", index=False)
     pd.DataFrame(linux_data).to_excel(writer, sheet_name="Linux", index=False)
