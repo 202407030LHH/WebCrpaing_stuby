@@ -181,9 +181,9 @@ for col in date_columns:
     if col in df_sqld.columns:
         df_sqld[col] = df_sqld[col].apply(convert_to_date_format)
 
-# 데이터 구조 변경: 필기/실기로 분리
-def restructure_data(df, source):
-    """데이터를 필기/실기로 분리"""
+# 데이터 구조 변경: 가로 형식 (항목명 | 날짜)
+def restructure_data_horizontal(df, source):
+    """데이터를 가로 형식으로 변환: 항목명 | 날짜"""
     new_rows = []
     
     for _, row in df.iterrows():
@@ -191,32 +191,66 @@ def restructure_data(df, source):
         
         # 필기 관련 데이터
         if pd.notna(row.get('written_exam', None)) and row['written_exam'] != '':
+            if row.get('written_form', '') != '':
+                new_rows.append({
+                    'source': source,
+                    'division': division,
+                    'exam_type': '필기',
+                    'category': 'written_form',
+                    'date': row.get('written_form', '')
+                })
+            
             new_rows.append({
                 'source': source,
                 'division': division,
                 'exam_type': '필기',
-                'form_date': row.get('written_form', ''),
-                'exam_date': row.get('written_exam', ''),
-                'result_date': row.get('written_result_date', '')
+                'category': 'written_exam',
+                'date': row.get('written_exam', '')
             })
+            
+            if row.get('written_result_date', '') != '':
+                new_rows.append({
+                    'source': source,
+                    'division': division,
+                    'exam_type': '필기',
+                    'category': 'written_result_date',
+                    'date': row.get('written_result_date', '')
+                })
         
         # 실기 관련 데이터
         if pd.notna(row.get('practical_exam', None)) and row['practical_exam'] != '':
+            if row.get('practical_form', '') != '':
+                new_rows.append({
+                    'source': source,
+                    'division': division,
+                    'exam_type': '실기',
+                    'category': 'practical_form',
+                    'date': row.get('practical_form', '')
+                })
+            
             new_rows.append({
                 'source': source,
                 'division': division,
                 'exam_type': '실기',
-                'form_date': row.get('practical_form', ''),
-                'exam_date': row.get('practical_exam', ''),
-                'result_date': row.get('final_result_date', '')
+                'category': 'practical_exam',
+                'date': row.get('practical_exam', '')
             })
+            
+            if row.get('final_result_date', '') != '':
+                new_rows.append({
+                    'source': source,
+                    'division': division,
+                    'exam_type': '실기',
+                    'category': 'final_result_date',
+                    'date': row.get('final_result_date', '')
+                })
     
     return pd.DataFrame(new_rows)
 
 # 각 소스별로 재구성
-df_ieip_restructured = restructure_data(df_ieip, 'IEIP')
-df_linux_restructured = restructure_data(df_linux, 'Linux')
-df_sqld_restructured = restructure_data(df_sqld, 'Sqld')
+df_ieip_restructured = restructure_data_horizontal(df_ieip, 'IEIP')
+df_linux_restructured = restructure_data_horizontal(df_linux, 'Linux')
+df_sqld_restructured = restructure_data_horizontal(df_sqld, 'Sqld')
 
 # 모든 데이터 합치기
 df_all_restructured = pd.concat([df_ieip_restructured, df_linux_restructured, df_sqld_restructured], ignore_index=True)
