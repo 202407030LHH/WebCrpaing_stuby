@@ -108,12 +108,14 @@ for item in select_items:
 
 # 엑셀 파일로 저장 (시트별로 분리)
 with pd.ExcelWriter("../../01. xlsx/calender_data.xlsx") as writer:
+    pd.DataFrame(yuhan_data).to_excel(writer, sheet_name="Yuhan", index=False)
     pd.DataFrame(IEIP_data).to_excel(writer, sheet_name="IEIP", index=False)
     pd.DataFrame(linux_data).to_excel(writer, sheet_name="Linux", index=False)
     pd.DataFrame(sqld_data).to_excel(writer, sheet_name="Sqld", index=False)
 
 # CSV로 저장 (하나의 파일에 모든 데이터)
 # source 열을 첫 번째 열로 설정
+df_yuhan = pd.DataFrame(yuhan_data)
 df_ieip = pd.DataFrame(IEIP_data)
 df_ieip.insert(0, 'source', 'IEIP')
 df_linux = pd.DataFrame(linux_data)
@@ -136,6 +138,13 @@ def convert_to_date_format(date_str):
         if "년" in date_str and "월" in date_str and "일" in date_str:
             date_obj = datetime.strptime(date_str, "%Y년 %m월 %d일")
             return date_obj.strftime("%Y-%m-%d")
+        
+        # "01월 01일" 형식 (유한대학교) - 년도 없음 (현재 년도 2026 추가)
+        if "월" in date_str and "일" in date_str:
+            parts = date_str.replace("월", " ").replace("일", "").strip().split()
+            if len(parts) == 2:
+                month, day = parts[0], parts[1]
+                return f"2026-{month.zfill(2)}-{day.zfill(2)}"
         
         # "01.27.(화) ~ 02.05.(목)" 또는 "01.30~03.03" 형식 - 첫 번째 날짜만 추출
         if "~" in date_str:
@@ -172,6 +181,12 @@ def convert_to_date_format(date_str):
         return date_str
 
 # 날짜 필드 변환
+# 유한대학교는 'days', 'contents' 컬럼 변환
+if not df_yuhan.empty:
+    df_yuhan['days'] = df_yuhan['days'].apply(convert_to_date_format)
+    df_yuhan['contents'] = df_yuhan['contents'].apply(convert_to_date_format)
+
+# 다른 시험들은 standard 컬럼 변환
 date_columns = ["written_form", "written_exam", "written_result_date", "practical_form", "practical_exam", "final_result_date"]
 for col in date_columns:
     if col in df_ieip.columns:
@@ -181,9 +196,9 @@ for col in date_columns:
     if col in df_sqld.columns:
         df_sqld[col] = df_sqld[col].apply(convert_to_date_format)
 
-# 데이터 구조 변경: 필기/실기로 분리
-def restructure_data(df, source):
-    """데이터를 필기/실기로 분리"""
+# 데이터 구조 변경: 가로 형식 (항목명 | 날짜)
+def restructure_data_horizontal(df, source):
+    """데이터를 가로 형식으로 변환: 항목명 | 날짜"""
     new_rows = []
     
     for _, row in df.iterrows():
@@ -191,35 +206,69 @@ def restructure_data(df, source):
         
         # 필기 관련 데이터
         if pd.notna(row.get('written_exam', None)) and row['written_exam'] != '':
+            if row.get('written_form', '') != '':
+                item = f"{source}_{'필기'}_{('written_form')}_{division}"
+                new_rows.append({
+                    'item': item,
+                    'date': row.get('written_form', '')
+                })
+            
+            item = f"{source}_{('필기')}_{('written_exam')}_{division}"
             new_rows.append({
-                'source': source,
-                'division': division,
-                'exam_type': '필기',
-                'form_date': row.get('written_form', ''),
-                'exam_date': row.get('written_exam', ''),
-                'result_date': row.get('written_result_date', '')
+                'item': item,
+                'date': row.get('written_exam', '')
             })
+            
+            if row.get('written_result_date', '') != '':
+                item = f"{source}_{('필기')}_{('written_result_date')}_{division}"
+                new_rows.append({
+                    'item': item,
+                    'date': row.get('written_result_date', '')
+                })
         
         # 실기 관련 데이터
         if pd.notna(row.get('practical_exam', None)) and row['practical_exam'] != '':
+            if row.get('practical_form', '') != '':
+                item = f"{source}_{('실기')}_{('practical_form')}_{division}"
+                new_rows.append({
+                    'item': item,
+                    'date': row.get('practical_form', '')
+                })
+            
+            item = f"{source}_{('실기')}_{('practical_exam')}_{division}"
             new_rows.append({
-                'source': source,
-                'division': division,
-                'exam_type': '실기',
-                'form_date': row.get('practical_form', ''),
-                'exam_date': row.get('practical_exam', ''),
-                'result_date': row.get('final_result_date', '')
+                'item': item,
+                'date': row.get('practical_exam', '')
             })
+            
+            if row.get('final_result_date', '') != '':
+                item = f"{source}_{('실기')}_{('final_result_date')}_{division}"
+                new_rows.append({
+                    'item': item,
+                    'date': row.get('final_result_date', '')
+                })
     
     return pd.DataFrame(new_rows)
 
 # 각 소스별로 재구성
-df_ieip_restructured = restructure_data(df_ieip, 'IEIP')
-df_linux_restructured = restructure_data(df_linux, 'Linux')
-df_sqld_restructured = restructure_data(df_sqld, 'Sqld')
+# 유한대학교는 그대로 사용 (days, contents 컬럼을 item, date로 변환)
+if not df_yuhan.empty:
+    # 날짜 형식을 다시 한 번 확인하면서 변환
+    days_formatted = df_yuhan['days'].apply(lambda x: convert_to_date_format(str(x)))
+    contents_formatted = df_yuhan['contents'].apply(lambda x: convert_to_date_format(str(x)))
+    df_yuhan_restructured = pd.DataFrame({
+        'item': days_formatted,
+        'date': contents_formatted
+    })
+else:
+    df_yuhan_restructured = pd.DataFrame(columns=['item', 'date'])
+
+df_ieip_restructured = restructure_data_horizontal(df_ieip, 'IEIP')
+df_linux_restructured = restructure_data_horizontal(df_linux, 'Linux')
+df_sqld_restructured = restructure_data_horizontal(df_sqld, 'Sqld')
 
 # 모든 데이터 합치기
-df_all_restructured = pd.concat([df_ieip_restructured, df_linux_restructured, df_sqld_restructured], ignore_index=True)
+df_all_restructured = pd.concat([df_yuhan_restructured, df_ieip_restructured, df_linux_restructured, df_sqld_restructured], ignore_index=True)
 
 # CSV 저장 (각 소스별로 분리)
 import os
@@ -227,21 +276,25 @@ csv_dir = os.path.join(os.path.dirname(__file__), "..", "..", "02. csv")
 
 # 통합 CSV
 all_csv_path = os.path.join(csv_dir, "calender_data_restructured.csv")
-df_all_restructured.to_csv(all_csv_path, index=False, encoding="utf-8-sig")
+df_all_restructured[['item', 'date']].to_csv(all_csv_path, index=False, encoding="utf-8-sig")
 print(f"통합 CSV 저장: {all_csv_path}")
 
 # 개별 CSV
+yuhan_csv_path = os.path.join(csv_dir, "Yuhan_restructured.csv")
+df_yuhan_restructured[['item', 'date']].to_csv(yuhan_csv_path, index=False, encoding="utf-8-sig")
+print(f"Yuhan CSV 저장: {yuhan_csv_path}")
+
 ieip_csv_path = os.path.join(csv_dir, "IEIP_restructured.csv")
-df_ieip_restructured.to_csv(ieip_csv_path, index=False, encoding="utf-8-sig")
+df_ieip_restructured[['item', 'date']].to_csv(ieip_csv_path, index=False, encoding="utf-8-sig")
 print(f"IEIP CSV 저장: {ieip_csv_path}")
 
 linux_csv_path = os.path.join(csv_dir, "Linux_restructured.csv")
-df_linux_restructured.to_csv(linux_csv_path, index=False, encoding="utf-8-sig")
+df_linux_restructured[['item', 'date']].to_csv(linux_csv_path, index=False, encoding="utf-8-sig")
 print(f"Linux CSV 저장: {linux_csv_path}")
 
 sqld_csv_path = os.path.join(csv_dir, "Sqld_restructured.csv")
-df_sqld_restructured.to_csv(sqld_csv_path, index=False, encoding="utf-8-sig")
+df_sqld_restructured[['item', 'date']].to_csv(sqld_csv_path, index=False, encoding="utf-8-sig")
 print(f"Sqld CSV 저장: {sqld_csv_path}")
 
-print("\n=== 재구성된 데이터 샘플 (필기/실기로 분리) ===")
+print("\n=== 재구성된 데이터 샘플 (가로 형식) ===")
 print(df_all_restructured.to_string())
